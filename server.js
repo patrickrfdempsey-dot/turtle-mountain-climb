@@ -7,7 +7,7 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Each [m,b] gives the climber's elevation y=m*x+b at time x.
