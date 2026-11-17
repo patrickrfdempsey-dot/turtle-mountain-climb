@@ -1,26 +1,39 @@
-TURTLE MOUNTAIN CLIMB — VERSION 3 (CLASSROOM TRIAL)
+TURTLE MOUNTAIN CLIMB — VERSION 5
+Queen of the Island + King of the Mountain
 
 WHAT'S NEW
-- Three faster betting races: 3 turtles / 10 seconds, 4 turtles / 12 seconds, 5 turtles / 15 seconds.
-- Prior to the betting races, the mountain shows ONLY labeled starting points (A/B/C etc.). Complete paths appear as the turtles race.
-- Five starting coins; betting maximum remains three.
-- Turtle Workshop: one coin buys +1 slope, or +10 feet starting elevation. Students with fewer than three coins get the free y=3x turtle.
-- The Alpine Lake Championship races all students at once (server limit 40), rather than separate heats. Race duration is 20 seconds.
-- The lake is a finishing-elevation target between 60 and 110 feet. A turtle below 60 falls short; a turtle above 110 overshoots. Among turtles landing in the lake, the five closest to 85 feet win. Ties: fewer coins spent, then name alphabetically. This is a landing challenge, not literally a first-across-the-finish-line race, since x represents time and all turtles move horizontally at the same rate.
-- A celebratory animated lake-swimming scene shows the five successful winners by their actual student names.
+- The existing 3 betting races remain 10, 12, and 15 seconds.
+- Before betting races, actual cartoon turtles appear at their correct y-intercept positions. Their future paths are hidden.
+- Betting-race camera slowly zooms during the last part, with small ZOOM! callouts at equation-based overtakes.
+- Queen of the Island clearly asks students to aim at 90 feet after 20 seconds. Lake = 60 to 120 feet.
+- Students still calculate finishing elevation themselves: the workshop does NOT display a prediction.
+- Queen rankings are by landing accuracy. Safe lake landings outrank misses. Equal accuracy shares a placement; equal cost/accuracy shares the crown.
+- Students keep their betting coins. They get a separate Queen building allowance equal to their betting balance (no coins are deducted from betting balance for Queen's turtle).
+- Queen finish awards placement bonus coins for King: with N students, 1st gets N, 2nd N-1, etc.; equal places get equal bonus.
+- King of the Mountain has a NEW turtle workshop. Total King budget = betting coin balance + Queen placement bonus.
+- Buy whole-number slope (1 coin per +1) or 10-foot head start (1 coin per +10 ft).
+- The King race ends when the sun rises, randomly chosen at the start between 8 and 22 real seconds (inclusive). This time is hidden from clients until the race ends.
+- Highest turtle at sunrise wins. This is the fun finale, with no artificial catch-up bonus.
+- Old saved teacher/student PINs automatically clear if a server deployment invalidates them.
 
-BEFORE CLASS
-1. Keep a copy of your working Version 2 ZIP.
-2. Extract this ZIP. Upload server.js, app.js, index.html, style.css, package.json and README.txt to the ROOT of your existing GitHub repository, replacing matching files.
-3. Commit changes. Wait until Render says 'Live'. Render should retain the same URL; don't delete your Render service.
-4. Test on a SCHOOL Chromebook, including teacher-hosted session + student join + a bet.
-5. Make a new teacher room after deployment. Old in-progress games are not retained across deployments.
+INSTALL — REPLACE FILES, NOT THE RENDER SERVICE
+1. Unzip this file on your computer.
+2. Go to https://github.com/patrickrfdempsey-dot/turtle-mountain-climb
+3. Choose Add file > Upload files.
+4. Upload THESE FIVE files only, replacing matching files at the repository root:
+   server.js, app.js, style.css, index.html, package.json
+5. Commit changes.
+6. Check Render deployment status. Your 'bite-hoard' service now uses the same GitHub repo, so it should also update automatically if Auto-Deploy is on.
+7. On both teacher/student devices, open a NEW game, using a fresh PIN.
 
-RELIABILITY NOTES
-- Syntax checked with Node 22.
-- Simulated 30 students joining, betting in each round, building turtles, and completing the championship without errors.
-- Has NOT been tested on a 30-Chromebook classroom network or on your school's content filter.
-- This is a prototype; do not sell access as a production classroom service without further reliability and privacy work.
+SCHOOL-APPROVED URL (assuming the same Render service remains connected):
+https://bite-hoard.onrender.com/
 
-GAMEPLAY NOTE
-Players may enter a nickname rather than a full name. The app keeps game state in server memory, so if Render restarts, room data disappears and the teacher needs to create a new game.
+ORIGINAL TURTLE SERVICE (if still connected):
+https://turtle-mountain-climb.onrender.com/ or your renamed service URL.
+
+NOTES
+- Do NOT delete your Render services or rename the approved URL.
+- All server state lives in memory: restarting the server resets current game PINs.
+- The code was syntax-checked; 30 simulated student clients finished the full game. UI functions passed scripted runtime checks. The visuals have not been checked in a real browser or on school Chromebooks.
+- Try one teacher and one student device before a full-class session.
