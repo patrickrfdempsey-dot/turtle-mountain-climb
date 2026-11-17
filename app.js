@@ -3,8 +3,7 @@ const sock=io(),main=document.getElementById('main'),net=document.getElementById
 let S=null,role='',chosen=0,stake=1,m=3,b=0,previous='',raf=null,trainingPoints=[],trainingValues=['','',''];
 const TRAINING=[
  {type:'plot',prompt:'Plot the three points from the table.',rows:[[-3,-2],[-1,2],[1,6]]},
- {type:'table',prompt:'Use the turtle route to complete the table.',xs:[-2,0,3]},
- {type:'plot',prompt:'Plot these coordinate points.',rows:[[-4,3],[-1,0],[2,-3]]}
+ {type:'table',prompt:'Use the turtle route to complete the table.',xs:[-2,0,3]}
 ];
 const letters='ABCDE';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -28,24 +27,24 @@ const eq=([mm,bb])=>`y = ${mm===1?'':mm}x${bb>0?' + '+bb:bb<0?' − '+Math.abs(b
 function action(name){send('host:action',{action:name});}
 function trainingPanel(){
  const t=S.myTraining;if(!t)return '<div class="locked">Join the game to begin training.</div>';
- if(t.done)return `<div class="trainingDone"><div class="big">🏁🐢</div><h2>Training complete!</h2><div class="stat">${S.myTokens} 🪙 for Race 1</div><div class="small">You answered ${t.correct} of 3 correctly.</div></div>`;
+ if(t.done)return `<div class="trainingDone"><div class="big">🏁🐢</div><h2>Training complete!</h2><div class="stat">${S.myTokens} 🪙 for Race 1</div><div class="small">You answered ${t.correct} of 2 correctly.</div></div>`;
  const q=TRAINING[t.q],retry=t.attempts===1?'<div class="retry">Try once more. Check each coordinate carefully.</div>':'';
  let work='';
  if(q.type==='plot'){
-  work=t.q===0?`<table class="trainingTable"><tr><th>x</th>${q.rows.map(r=>`<td>${r[0]}</td>`).join('')}</tr><tr><th>y</th>${q.rows.map(r=>`<td>${r[1]}</td>`).join('')}</tr></table>`:`<div class="coordinateList">${q.rows.map(r=>`(${r[0]}, ${r[1]})`).join(' · ')}</div>`;
+  work=`<table class="trainingTable"><tr><th>x</th>${q.rows.map(r=>`<td>${r[0]}</td>`).join('')}</tr><tr><th>y</th>${q.rows.map(r=>`<td>${r[1]}</td>`).join('')}</tr></table>`;
   work+=`<div class="small">Click all three points on the graph. Click a selected point to remove it.</div><div class="stat">${trainingPoints.length} / 3 points</div>`;
  }else work=`<table class="trainingTable"><tr><th>x</th>${q.xs.map(x=>`<td>${x}</td>`).join('')}</tr><tr><th>y</th>${q.xs.map((_,i)=>`<td><input class="trainingInput" data-ti="${i}" type="number" value="${trainingValues[i]}"></td>`).join('')}</tr></table>`;
- return `<div class="trainingHead">QUESTION ${t.q+1} OF 3</div><h2>${q.prompt}</h2>${retry}${work}<button class="btn yellow full" id="submitTraining">CHECK ANSWER</button><div class="stat">${S.myTokens} 🪙</div><div class="small">Correct answer = +1 coin · One retry per question</div>`;
+ return `<div class="trainingHead">QUESTION ${t.q+1} OF 2</div><h2>${q.prompt}</h2>${retry}${work}<div class="trainingButtons"><button class="btn secondary" id="clearTraining">CLEAR</button><button class="btn yellow" id="submitTraining">CHECK ANSWER</button></div><div class="stat">${S.myTokens} 🪙</div><div class="small">Correct answer = +1 coin · One retry per question</div>`;
 }
 function side(){
  if(!S)return '';
  const teacher=role==='teacher',queen=S.final,king=S.king,phase=S.phase;
  const title=phase==='training'?'🐢 TURTLE TRAINING':queen?'👑 QUEEN OF THE ISLAND':king?'🌅 KING OF THE MOUNTAIN':`RACE ${S.round+1} / 3`;
- const seconds=phase==='training'?'3 QUESTIONS':king?(phase==='king-finished'?`${S.sunriseSeconds}s`:'???'):`${S.race.seconds}s`;
+ const seconds=phase==='training'?'2 QUESTIONS':king?(phase==='king-finished'?`${S.sunriseSeconds}s`:'???'):`${S.race.seconds}s`;
  let html=`<div class="card"><div class="minihead"><span class="chip">${title}</span><span class="chip">⏱ ${seconds}</span></div>`;
  if(teacher)html+=`<div class="notice" style="margin-top:14px">PIN <span class="bigpin">${esc(S.code)}</span></div>`;
  if(phase==='training'){
-  if(teacher)html+=`<div class="goal"><b>🐢 TURTLE TRAINING</b><span>Three fast table and graph questions. Students begin with 2 coins and earn 1 coin for each correct answer.</span></div><div class="stat">${S.trainingDone} / ${S.joined} <span class="small">finished</span></div><button class="btn yellow full" id="startRace">${S.trainingDone===S.joined&&S.joined?'GO TO RACE 1 →':'SKIP / GO TO RACE 1 →'}</button>`;
+  if(teacher)html+=`<div class="goal"><b>🐢 TURTLE TRAINING</b><span>Two fast table and graph questions. Students begin with 2 coins and earn 1 coin for each correct answer.</span></div><div class="stat">${S.trainingDone} / ${S.joined} <span class="small">finished</span></div><button class="btn yellow full" id="startRace">${S.trainingDone===S.joined&&S.joined?'GO TO RACE 1 →':'SKIP / GO TO RACE 1 →'}</button>`;
   else html+=trainingPanel();
   html+='</div>';
   if(teacher)html+='<button class="btn secondary full" id="reset" style="margin-top:12px">↻ Reset</button>';
@@ -116,6 +115,7 @@ function draw(){if(!S)return welcome();const phase=S.phase;const sky=S.race?.sce
  const build=document.getElementById('lockBuild');if(build)build.onclick=()=>send(S.king?'king:build':'build',{m,b});
  for(const input of main.querySelectorAll('[data-ti]'))input.oninput=()=>trainingValues[Number(input.dataset.ti)]=input.value;
  const submitTraining=document.getElementById('submitTraining');if(submitTraining)submitTraining.onclick=()=>{const q=TRAINING[S.myTraining.q],answer=q.type==='plot'?trainingPoints:trainingValues.map(v=>Number(v));if(q.type==='plot'&&answer.length!==3)return toast('Plot all three points first.');if(q.type==='table'&&trainingValues.some(v=>v===''))return toast('Complete all three table values.');send('training:answer',{q:S.myTraining.q,answer},a=>toast(a.correct?'Correct! +1 coin':a.retry?'Not quite. You have one more try.':'Not quite. Moving to the next question.'));};
+ const clearTraining=document.getElementById('clearTraining');if(clearTraining)clearTraining.onclick=()=>{trainingPoints=[];trainingValues=['','',''];draw();};
  const start=document.getElementById('startRace');if(start)start.onclick=()=>action('start');
  const next=document.getElementById('nextRace');if(next)next.onclick=()=>action('next');
  const reset=document.getElementById('reset');if(reset)reset.onclick=()=>{if(confirm('Reset scores and return to Sunrise?'))action('reset');};

@@ -2,8 +2,8 @@ TURTLE MOUNTAIN CLIMB — VERSION 7
 Queen of the Island + King of the Mountain
 
 WHAT'S NEW
-- Turtle Training now comes before Race 1 with three quick questions: table to graph, graph to table, and coordinates to graph.
-- Training includes negative coordinates. Students begin with 2 coins, earn 1 per correct answer, and receive one retry per question.
+- Turtle Training now comes before Race 1 with two quick questions: table to graph and graph to table.
+- Training includes negative coordinates. Students begin with 2 coins, earn 1 per correct answer, receive one retry per question, and can clear their work before submitting.
 - The teacher can wait for everyone or skip directly to Race 1.
 - The existing 3 betting races remain 10, 12, and 15 seconds.
 - Before betting races, actual cartoon turtles appear at their correct y-intercept positions. Their future paths are hidden.

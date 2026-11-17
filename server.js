@@ -29,8 +29,7 @@ const NAMES=['Coral','Chartreuse','Zaffre','Wisteria','Nacarat'];
 const COLORS=['#ff6b78','#badb36','#386ee8','#ac8cdb','#f58b4a'];
 const TRAINING=[
  {type:'plot',answer:[[-3,-2],[-1,2],[1,6]]},
- {type:'table',answer:[4,2,-1]},
- {type:'plot',answer:[[-4,3],[-1,0],[2,-3]]}
+ {type:'table',answer:[4,2,-1]}
 ];
 const rooms=new Map();
 const clean=s=>String(s??'').replace(/[<>\x00-\x1f]/g,'').trim().slice(0,24);
