@@ -17,6 +17,33 @@ const RACES = [
  {seconds:12,scene:'sunset',lines:[[2,50],[5,11],[3,31],[4,15]]},
  {seconds:15,scene:'night',lines:[[2,59],[6,0],[4,28],[3,46],[5,9]]}
 ];
+// Version 8: one balanced set of equations per classroom, with varied winners.
+// Race lengths and animation timing are unchanged.
+function randomShuffle(a){
+ const out=[...a];
+ for(let i=out.length-1;i>0;i--){const j=crypto.randomInt(i+1);[out[i],out[j]]=[out[j],out[i]];}
+ return out;
+}
+function makeRaces(){
+ const slopes=[[2,3,5],[2,3,4,5],[2,3,4,5,6]];
+ const offsets=[[-4,-1,3],[-5,-2,1,4],[-5,-3,0,2,5]];
+ const baseHeights=[55,78,97];
+ let previousWinner=-1;
+ return RACES.map((template,round)=>{
+   const ms=randomShuffle(slopes[round]);
+   let vals,leader;
+   // Rotate winners, and keep final elevations close enough for dramatic overtakes.
+   for(let tries=0;tries<30;tries++){
+     vals=randomShuffle(offsets[round]);
+     leader=vals.indexOf(Math.max(...vals));
+     if(leader!==previousWinner)break;
+   }
+   previousWinner=leader;
+   const center=baseHeights[round]+crypto.randomInt(0,4);
+   const lines=ms.map((m,i)=>[m,center+vals[i]-m*template.seconds]);
+   return {...template,lines};
+ });
+}
 const FINAL_INDEX=RACES.length;
 const KING_INDEX=FINAL_INDEX+1;
 const QUEEN_BUDGET=10;
@@ -66,7 +93,7 @@ function queenRankings(room){
    entry.p.queenBonus=Math.max(1,arr.length-rank+1);
  });
 }
-function activeRace(room){if(room.index<FINAL_INDEX)return RACES[room.index];const heat=heatMembers(room);
+function activeRace(room){if(room.index<FINAL_INDEX)return room.races[room.index];const heat=heatMembers(room);
  if(room.index===FINAL_INDEX)return {...PLATEAU,lines:heat.map(({p})=>[p.build?.m??3,p.build?.b??0])};
  return {seconds:room.phase==='king-racing'?SUNRISE_MAX:(room.sunriseSeconds||SUNRISE_MAX),scene:'night',lines:heat.map(({p})=>[p.kingBuild?.m??3,p.kingBuild?.b??0])};
 }
@@ -105,7 +132,7 @@ function startRace(room){
  room.endAt=room.startAt+(room.index===KING_INDEX?room.sunriseSeconds:activeRace(room).seconds)*1000;
  room.timer=setTimeout(()=>{
   if(!['racing','final-racing','king-racing'].includes(room.phase))return;
-  if(room.index<FINAL_INDEX){const winning=winners(RACES[room.index]);for(const p of room.players.values()){
+  if(room.index<FINAL_INDEX){const winning=winners(room.races[room.index]);for(const p of room.players.values()){
     if(p.bet?.round!==room.index)continue;
     const won=winning.includes(p.bet.pick);p.tokens+=won?p.bet.amount:-p.bet.amount;if(won)p.wins++;
    }room.phase='results';
@@ -115,11 +142,11 @@ function startRace(room){
  },Math.max(0,room.endAt-Date.now()));
 }
 io.on('connection',socket=>{
- socket.on('create',(_,cb)=>{const code=newCode(),secret=token(),room={code,secret,index:0,phase:'training',players:new Map(),connections:new Map(),heats:[],heatIndex:0,champions:[],swimmers:[],sunriseSeconds:null,timer:null,startAt:null,endAt:null};rooms.set(code,room);attach(socket,room,{teacher:true});cb?.({ok:true,code,secret});publish(room);});
+ socket.on('create',(_,cb)=>{const code=newCode(),secret=token(),room={code,secret,races:makeRaces(),index:0,phase:'training',players:new Map(),connections:new Map(),heats:[],heatIndex:0,champions:[],swimmers:[],sunriseSeconds:null,timer:null,startAt:null,endAt:null};rooms.set(code,room);attach(socket,room,{teacher:true});cb?.({ok:true,code,secret});publish(room);});
  socket.on('host:rejoin',({code,secret}={},cb)=>{const r=rooms.get(String(code||''));if(!r||r.secret!==secret)return err(cb,'Teacher session unavailable. Create a new game.');attach(socket,r,{teacher:true});cb?.({ok:true});publish(r);});
  socket.on('join',({code,name,id}={},cb)=>{const room=rooms.get(String(code||'').trim());if(!room)return err(cb,'No game with that PIN.');if(room.phase==='king-finished')return err(cb,'This game has ended.');name=clean(name);if(!name)return err(cb,'Enter a name.');let playerId=(typeof id==='string'&&/^[a-f0-9]{32}$/.test(id)&&room.players.has(id))?id:null;if(!playerId){if(room.index>0||!['training','betting'].includes(room.phase))return err(cb,'This game has already started.');if(room.players.size>=40)return err(cb,'This classroom is full.');if([...room.players.values()].some(p=>p.name.toLowerCase()===name.toLowerCase()))return err(cb,'That name is taken; add an initial.');playerId=token();room.players.set(playerId,{name,tokens:2,wins:0,bet:null,training:{q:0,correct:0,attempts:0,done:false},build:null,final:null,queenRank:null,queenBonus:null,kingBuild:null,kingHeight:null});}attach(socket,room,{teacher:false,playerId});cb?.({ok:true,id:playerId});publish(room);});
  socket.on('training:answer',({q,answer}={},cb)=>{const room=getRoom(socket),role=room?.connections.get(socket.id);if(!room||role.teacher)return err(cb,'Join as a student.');if(room.phase!=='training')return err(cb,'Training is closed.');const p=room.players.get(role.playerId),t=p.training;if(t.done||q!==t.q||!TRAINING[q])return err(cb,'That question is no longer active.');const expected=TRAINING[q].answer;let normalized=answer;if(TRAINING[q].type==='plot'&&Array.isArray(answer))normalized=answer.map(v=>[Number(v?.[0]),Number(v?.[1])]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);if(TRAINING[q].type==='table'&&Array.isArray(answer))normalized=answer.map(Number);const correct=JSON.stringify(normalized)===JSON.stringify(expected);t.attempts++;if(correct){p.tokens++;t.correct++;t.q++;t.attempts=0;}else if(t.attempts>=2){t.q++;t.attempts=0;}if(t.q>=TRAINING.length)t.done=true;cb?.({ok:true,correct,done:t.done,retry:!correct&&!t.done&&t.attempts===1});publish(room);});
- socket.on('bet',({pick,amount}={},cb)=>{const room=getRoom(socket),role=room?.connections.get(socket.id);if(!room||role.teacher)return err(cb,'Join as a student.');if(room.phase!=='betting'||room.index>=FINAL_INDEX)return err(cb,'Betting is closed.');const p=room.players.get(role.playerId);if(p.bet?.round===room.index)return err(cb,'Your bet is locked.');if(!Number.isInteger(pick)||pick<0||pick>=RACES[room.index].lines.length)return err(cb,'Choose a turtle.');if(!Number.isInteger(amount)||amount<1||amount>Math.min(3,p.tokens))return err(cb,'Bet exceeds your balance or limit.');p.bet={round:room.index,pick,amount};cb?.({ok:true});publish(room);});
+ socket.on('bet',({pick,amount}={},cb)=>{const room=getRoom(socket),role=room?.connections.get(socket.id);if(!room||role.teacher)return err(cb,'Join as a student.');if(room.phase!=='betting'||room.index>=FINAL_INDEX)return err(cb,'Betting is closed.');const p=room.players.get(role.playerId);if(p.bet?.round===room.index)return err(cb,'Your bet is locked.');if(!Number.isInteger(pick)||pick<0||pick>=room.races[room.index].lines.length)return err(cb,'Choose a turtle.');if(!Number.isInteger(amount)||amount<1||amount>Math.min(3,p.tokens))return err(cb,'Bet exceeds your balance or limit.');p.bet={round:room.index,pick,amount};cb?.({ok:true});publish(room);});
  socket.on('build',({m,b}={},cb)=>{const room=getRoom(socket),role=room?.connections.get(socket.id);if(!room||role.teacher)return err(cb,'Join as a student.');if(room.phase!=='workshop')return err(cb,'Workshop is closed.');const p=room.players.get(role.playerId);if(p.build)return err(cb,'Turtle is already built.');if(!Number.isInteger(m)||m<0||m>15||!Number.isInteger(b)||b<0||b>150||b%10!==0)return err(cb,'Use whole-number slope and 10-foot head starts.');
  const cost=m+b/10;
  if(m<1)return err(cb,'Choose a slope of at least 1.');
@@ -141,10 +168,10 @@ io.on('connection',socket=>{
     for(const p of room.players.values())if(!p.kingBuild)p.kingBuild={m:3,b:0,cost:0};
     startRace(room);
   }else if(action==='reset'&&['training','betting','results','workshop','queen-finished','king-workshop','king-finished'].includes(room.phase)){
-    clearRace(room);room.index=0;room.phase='training';room.heats=[];room.heatIndex=0;room.champions=[];room.swimmers=[];room.sunriseSeconds=null;for(const p of room.players.values()){p.tokens=2;p.wins=0;p.bet=null;p.training={q:0,correct:0,attempts:0,done:false};p.build=null;p.final=null;p.queenRank=null;p.queenBonus=null;p.kingBuild=null;p.kingHeight=null;}
+    clearRace(room);room.index=0;room.races=makeRaces();room.phase='training';room.heats=[];room.heatIndex=0;room.champions=[];room.swimmers=[];room.sunriseSeconds=null;for(const p of room.players.values()){p.tokens=2;p.wins=0;p.bet=null;p.training={q:0,correct:0,attempts:0,done:false};p.build=null;p.final=null;p.queenRank=null;p.queenBonus=null;p.kingBuild=null;p.kingHeight=null;}
   }else return err(cb,'That action is not available right now.');
   cb?.({ok:true});publish(room);
  });
  socket.on('disconnect',()=>{const r=getRoom(socket);if(r){r.connections.delete(socket.id);publish(r);}});
 });
-const port=process.env.PORT||3000;server.listen(port,'0.0.0.0',()=>console.log('Turtle Mountain Climb 7 on '+port));
+const port=process.env.PORT||3000;server.listen(port,'0.0.0.0',()=>console.log('Turtle Mountain Climb 8 on '+port));
