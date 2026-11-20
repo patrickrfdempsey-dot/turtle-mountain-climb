@@ -9,3 +9,12 @@
 
 /* V8: big, readable classroom joining link (home and projected training screen). */
 .joinUrl{background:#ecf6c8;border:3px solid #3a8069;border-radius:16px;display:grid;gap:5px;padding:14px 16px;margin:12px 0 15px;text-align:center;box-shadow:0 4px 0 #224d45}.joinUrl span{font-weight:900;letter-spacing:1.5px;font-size:14px;color:#2c7355}.joinUrl strong{font:900 clamp(21px,2.35vw,36px) Fredoka,system-ui,sans-serif;color:#193b3d;overflow-wrap:anywhere;line-height:1.15}.trainingJoinUrl{position:absolute;z-index:5;top:66px;left:50%;transform:translateX(-50%);width:max-content;max-width:93%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:3px;background:#fff9d9ef;border:3px solid #3a8069;border-radius:17px;padding:13px 24px;box-shadow:0 4px 0 #164c42;color:#224843;text-align:center;pointer-events:none}.trainingJoinUrl small{font-size:14px;font-weight:900;letter-spacing:1px}.trainingJoinUrl strong{font:900 clamp(20px,2.6vw,36px) Fredoka,system-ui,sans-serif;overflow-wrap:anywhere;line-height:1.15}.trainingJoinUrl span{font-size:13px;font-weight:800}@media(max-width:660px){.trainingJoinUrl{top:56px;padding:8px 11px}.trainingJoinUrl span{display:none}.joinUrl strong{font-size:23px}}
+
+/* V10 betting timer and pause/early-start controls */
+.betClock{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;margin:13px 0;padding:12px 8px;border:3px solid #d0a34b;border-radius:15px;background:#fff2c2;color:#4b4236;font-family:Fredoka,sans-serif;font-size:21px;text-align:center}
+.betClock b{font-size:37px;font-variant-numeric:tabular-nums;letter-spacing:1px;line-height:1.1}
+.betClock span{font-size:13px;font-weight:800;flex-basis:100%}
+.betClock .urgent{color:#c33b32;animation:beat .65s ease-in-out infinite alternate}
+.teacherBetActions{display:grid;gap:7px;margin:10px 0}
+.studentClock b{font-size:30px}
+@keyframes beat{to{transform:scale(1.08)}}

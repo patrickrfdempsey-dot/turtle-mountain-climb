@@ -1,10 +1,8 @@
 'use strict';
 const sock=io(),main=document.getElementById('main'),net=document.getElementById('network');
 let S=null,role='',chosen=0,stake=1,m=3,b=0,previous='',raf=null,trainingPoints=[],trainingValues=['','',''];
-const TRAINING=[
- {type:'plot',prompt:'Plot the three points from the table.',rows:[[-3,-2],[-1,2],[1,6]]},
- {type:'table',prompt:'Use the turtle route to complete the table.',xs:[-2,0,3]}
-];
+const TRAINING_PROMPTS=['Plot the three points from the table.','Use the turtle route to complete the table.'];
+const maxBet=t=>t>0?Math.max(1,Math.floor(t/2)):0;
 const letters='ABCDE';
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(x,l,h)=>Math.max(l,Math.min(h,x));
@@ -19,22 +17,31 @@ function reconnect(){
 }
 sock.on('connect',()=>{net.textContent='● connected';reconnect();});sock.on('disconnect',()=>net.textContent='● reconnecting');
 sock.on('state',data=>{const phaseChanged=data.phase!==S?.phase||data.round!==S?.round,trainingChanged=data.myTraining?.q!==S?.myTraining?.q;S=data;role=data.isTeacher?'teacher':data.myName?'student':role;if(phaseChanged){chosen=0;stake=1;m=data.king?1:3;b=0;}if(trainingChanged){trainingPoints=[];trainingValues=['','',''];}draw();});
-function welcome(){if(S)return;main.innerHTML=`<div class="startwrap"><div class="card startart"><div class="big">🐢 ⛰️</div><p>Sunrise to moonlight</p><div class="introTurtles">🌅 🌇 🌙 🏔️</div></div><div class="card flexcol"><h1>Turtle<br>Mountain<br>Climb!</h1><div class="joinUrl" aria-label="Class game website"><span>CLASS GAME LINK</span><strong>bite-hoard.onrender.com</strong></div><div class="muted">VERSION 8 · Turtle Training · Equal Queen budgets · Sunrise finale</div><div class="muted">Earn coins · 3 races · Queen of the Island · King of the Mountain</div><button class="btn yellow" id="host">Teacher — Create game</button><hr style="width:100%;border:1px solid #e6dbc9"><input id="name" class="field" maxlength="24" placeholder="Name" autocomplete="off"><input id="pin" class="field" maxlength="6" inputmode="numeric" placeholder="Game PIN"><button class="btn" id="join">Join</button></div></div>`;
+function welcome(){if(S)return;main.innerHTML=`<div class="startwrap"><div class="card startart"><div class="big">🐢 ⛰️</div><p>Sunrise to moonlight</p><div class="introTurtles">🌅 🌇 🌙 🏔️</div></div><div class="card flexcol"><h1>Turtle<br>Mountain<br>Climb!</h1><div class="joinUrl" aria-label="Class game website"><span>CLASS GAME LINK</span><strong>bite-hoard.onrender.com</strong></div><div class="muted">VERSION 10 · Turtle Training · Equal Queen budgets · Sunrise finale</div><div class="muted">Earn coins · 3 races · Queen of the Island · King of the Mountain</div><button class="btn yellow" id="host">Teacher — Create game</button><hr style="width:100%;border:1px solid #e6dbc9"><input id="name" class="field" maxlength="24" placeholder="Name" autocomplete="off"><input id="pin" class="field" maxlength="6" inputmode="numeric" placeholder="Game PIN"><button class="btn" id="join">Join</button></div></div>`;
  document.getElementById('host').onclick=()=>send('create',{},a=>{role='teacher';sessionStorage.setItem('mountainHost',JSON.stringify({code:a.code,secret:a.secret}));});
  document.getElementById('join').onclick=()=>{const name=document.getElementById('name').value.trim(),code=document.getElementById('pin').value.trim();if(!name||!/^\d{6}$/.test(code))return toast('Enter name and 6-digit PIN');send('join',{name,code},a=>{role='student';sessionStorage.setItem('mountainPlayer',JSON.stringify({id:a.id,name,code}));});};
 }
 const eq=([mm,bb])=>`y = ${mm===1?'':mm}x${bb>0?' + '+bb:bb<0?' − '+Math.abs(bb):''}`;
 function action(name){send('host:action',{action:name});}
+function clockText(){
+ if(!S||S.phase!=='betting')return '02:00';
+ const ms=S.betPaused?S.betRemainingMs:Math.max(0,(S.betEndsAt||Date.now())-Date.now());
+ const secs=Math.ceil(ms/1000);
+ return `${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+}
+// Update the visible countdown without re-rendering the students' active inputs.
+setInterval(()=>{if(S?.phase==='betting')for(const el of document.querySelectorAll('.countdownClock')){el.textContent=clockText();el.classList.toggle('urgent',!S.betPaused&&Number(el.textContent.slice(3))<=10&&el.textContent.startsWith('00:'));}},250);
+
 function trainingPanel(){
  const t=S.myTraining;if(!t)return '<div class="locked">Join the game to begin training.</div>';
  if(t.done)return `<div class="trainingDone"><div class="big">🏁🐢</div><h2>Training complete!</h2><div class="stat">${S.myTokens} 🪙 for Race 1</div><div class="small">You answered ${t.correct} of 2 correctly.</div></div>`;
- const q=TRAINING[t.q],retry=t.attempts===1?'<div class="retry">Try once more. Check each coordinate carefully.</div>':'';
+ const q=S.trainingQuestions[t.q],retry=t.attempts===1?'<div class="retry">Try once more. Check each coordinate carefully.</div>':'';
  let work='';
  if(q.type==='plot'){
   work=`<table class="trainingTable"><tr><th>x</th>${q.rows.map(r=>`<td>${r[0]}</td>`).join('')}</tr><tr><th>y</th>${q.rows.map(r=>`<td>${r[1]}</td>`).join('')}</tr></table>`;
   work+=`<div class="small">Click all three points on the graph. Click a selected point to remove it.</div><div class="stat">${trainingPoints.length} / 3 points</div>`;
  }else work=`<table class="trainingTable"><tr><th>x</th>${q.xs.map(x=>`<td>${x}</td>`).join('')}</tr><tr><th>y</th>${q.xs.map((_,i)=>`<td><input class="trainingInput" data-ti="${i}" type="number" value="${trainingValues[i]}"></td>`).join('')}</tr></table>`;
- return `<div class="trainingHead">QUESTION ${t.q+1} OF 2</div><h2>${q.prompt}</h2>${retry}${work}<div class="trainingButtons"><button class="btn secondary" id="clearTraining">CLEAR</button><button class="btn yellow" id="submitTraining">CHECK ANSWER</button></div><div class="stat">${S.myTokens} 🪙</div><div class="small">Correct answer = +1 coin · One retry per question</div>`;
+ return `<div class="trainingHead">QUESTION ${t.q+1} OF 2</div><h2>${TRAINING_PROMPTS[t.q]}</h2>${retry}${work}<div class="trainingButtons"><button class="btn secondary" id="clearTraining">CLEAR</button><button class="btn yellow" id="submitTraining">CHECK ANSWER</button></div><div class="stat">${S.myTokens} 🪙</div><div class="small">Correct answer = +1 coin · One retry per question</div>`;
 }
 function side(){
  if(!S)return '';
@@ -52,15 +59,15 @@ function side(){
  }
  if(!queen&&!king){
   html+=`<div class="equations">${S.race.lines.map((line,i)=>`<div class="eq"><span class="letter">${letters[i]}</span><span class="n">${esc(S.names[i])}</span><span class="formula">${eq(line)}</span></div>`).join('')}</div>`;
-  if(teacher){html+=`<div class="stat">${S.betCount} / ${S.joined} <span class="small">bets</span></div>`;if(phase==='betting')html+='<button class="btn yellow full" id="startRace">🏁 START RACE</button>';if(phase==='results')html+='<button class="btn yellow full" id="nextRace">NEXT →</button>';}
+  if(teacher){html+=`<div class="stat">${S.betCount} / ${S.joined} <span class="small">bets</span></div>`;if(phase==='betting')html+=`<div class="betClock">⏱ <b class="countdownClock">${clockText()}</b><span>${S.betPaused?'PAUSED':'until the race starts'}</span></div><div class="teacherBetActions"><button class="btn yellow full" id="startRace">🏁 START NOW</button><button class="btn secondary full" id="timerToggle">${S.betPaused?'▶ RESUME':'⏸ PAUSE'}</button></div>`;if(phase==='results')html+='<button class="btn yellow full" id="nextRace">NEXT →</button>';}
   else if(S.myBet?.round===S.round)html+=`<div class="locked">✓ ${esc(S.names[S.myBet.pick])} · ${S.myBet.amount} 🪙</div><div class="stat">${S.myTokens} 🪙</div>`;
   else if(phase==='betting'){
-   const max=Math.min(3,S.myTokens||0);html+=`<div class="stat">${S.myTokens} 🪙</div>`;
+   const max=maxBet(S.myTokens||0);html+=`<div class="betClock studentClock">⏱ <b class="countdownClock">${clockText()}</b><span>${S.betPaused?'PAUSED':'to place your bet'}</span></div><div class="stat">${S.myTokens} 🪙</div>`;
    if(max){stake=clamp(stake,1,max);html+=`<div class="bets">${S.race.lines.map((_,i)=>`<button class="pick ${chosen===i?'sel':''}" data-pick="${i}"><span class="dot" style="background:${S.colors[i]}"></span>${esc(S.names[i])}</button>`).join('')}</div><div class="wager"><strong>Bet</strong><input id="wager" type="number" min="1" max="${max}" value="${stake}" step="1"><span class="small muted">max ${max}</span></div><button class="btn yellow full" id="betNow">✓ BET</button>`;}
    else html+='<div class="locked">0 🪙 · You can still watch!</div>';
   }else html+=`<div class="locked">${phase==='racing'?'🐢 Climbing…':'🏁 Race finished'}</div><div class="stat">${S.myTokens} 🪙</div>`;
  }else if(queen){
-  html+=`<div class="goal"><b>🎯 AIM FOR THE ISLAND: 90 FEET!</b><span>At 20 seconds, get as close to 90 ft as you can. 60–120 ft = lake. Closest = Queen! Calculate it yourself.</span></div>`;
+  html+=`<div class="goal"><b>🎯 AIM FOR THE ISLAND: ${S.lakeTarget} FEET!</b><span>At 20 seconds, get as close to ${S.lakeTarget} ft as you can. 60–120 ft = lake. Closest = Queen! If tied, the first equation submitted wins the crown.</span></div>`;
   if(teacher){html+=`<div class="stat">${S.builtCount} / ${S.joined} <span class="small">built</span></div>`;
    if(phase==='workshop')html+='<button class="btn yellow full" id="startRace">🏁 START ALL TURTLES</button>';
    if(phase==='final-racing')html+=`<div class="notice">All ${S.joined} student turtles climbing!</div>`;
@@ -108,19 +115,20 @@ function workshop(king){
 function raceKey(){const turtles=S.heatTurtles||[];return `<div class="raceKey"><b>🐢 WHO'S WHO</b><div>${turtles.map(t=>`<span class="keyRacer ${t.name===S.myName?'mine':''}"><i style="background:${t.color}">${t.bib}</i>${esc(t.name)}</span>`).join('')}</div></div>`;}
 function leader(board,mode){return `<table class="leader">${board.slice(0,40).map((p,i)=>`<tr><td>${mode==='queen'?'#'+p.queenRank: i<3?['🥇','🥈','🥉'][i]:i+1+'.'} ${esc(p.name)}</td><td>${mode==='queen'?`+${p.queenBonus} 🪙 · ${p.final?.height??'—'} ft`:mode==='king'?`${p.kingHeight??'—'} ft`:p.tokens+' 🪙'}</td></tr>`).join('')}</table>`;}
 function draw(){if(!S)return welcome();const phase=S.phase;const sky=S.race?.scene||'night';
- main.innerHTML=`<div class="game"><div class="side">${side()}</div><section class="scene ${phase==='training'?'day':sky}"><div class="sceneTop">${phase==='training'?'🐢 TURTLE TRAINING':S.king?'🌅 KING OF THE MOUNTAIN':S.final?'👑 QUEEN OF THE ISLAND':phase==='racing'?'🐢 CLIMB!':'🐢 MOUNTAIN CLIMB'}</div><div id="mountain"></div>${phase==='training'&&role==='teacher'?`<div class="trainingJoinUrl"><small>STUDENTS JOIN AT</small><strong>bite-hoard.onrender.com</strong><span>Enter your name and the class PIN</span></div>`:''}<div class="sceneBottom">${phase==='training'?'TABLES ↔ GRAPHS · EARN YOUR COINS':S.king?phase==='king-workshop'?'🔧 BUILD YOUR SUNRISE TURTLE':phase==='king-finished'?'🌅 SUNRISE!':'🌙 THE SUN CAN RISE ANY MOMENT':S.final?phase==='workshop'?'🎯 AIM FOR 90 FEET':phase==='queen-finished'?'👑 QUEEN & LAKE SWIMMERS':`ALL ${S.joined} TURTLES CLIMBING`:phase==='betting'?`${S.betCount} BETS`:'🏁 '+S.race.seconds+' SECONDS'}</div></section></div>`;
+ main.innerHTML=`<div class="game"><div class="side">${side()}</div><section class="scene ${phase==='training'?'day':sky}"><div class="sceneTop">${phase==='training'?'🐢 TURTLE TRAINING':S.king?'🌅 KING OF THE MOUNTAIN':S.final?'👑 QUEEN OF THE ISLAND':phase==='racing'?'🐢 CLIMB!':'🐢 MOUNTAIN CLIMB'}</div><div id="mountain"></div>${phase==='training'&&role==='teacher'?`<div class="trainingJoinUrl"><small>STUDENTS JOIN AT</small><strong>bite-hoard.onrender.com</strong><span>Enter your name and the class PIN</span></div>`:''}<div class="sceneBottom">${phase==='training'?'TABLES ↔ GRAPHS · EARN YOUR COINS':S.king?phase==='king-workshop'?'🔧 BUILD YOUR SUNRISE TURTLE':phase==='king-finished'?'🌅 SUNRISE!':'🌙 THE SUN CAN RISE ANY MOMENT':S.final?phase==='workshop'?`🎯 AIM FOR ${S.lakeTarget} FEET`:phase==='queen-finished'?'👑 QUEEN & LAKE SWIMMERS':`ALL ${S.joined} TURTLES CLIMBING`:phase==='betting'?`${S.betCount} BETS`:'🏁 '+S.race.seconds+' SECONDS'}</div></section></div>`;
  for(const button of main.querySelectorAll('[data-pick]'))button.onclick=()=>{chosen=Number(button.dataset.pick);draw();};
- const bet=document.getElementById('betNow');if(bet)bet.onclick=()=>{const max=Math.min(3,S.myTokens);stake=clamp(Math.floor(Number(document.getElementById('wager').value)||1),1,max);send('bet',{pick:chosen,amount:stake});};
+ const bet=document.getElementById('betNow');if(bet)bet.onclick=()=>{const max=maxBet(S.myTokens);stake=clamp(Math.floor(Number(document.getElementById('wager').value)||1),1,max);send('bet',{pick:chosen,amount:stake});};
  for(const step of main.querySelectorAll('[data-step]'))step.onclick=()=>{const [which,delta]=step.dataset.step.split(':');if(which==='m')m=clamp(m+Number(delta),1,S.king?60:15);else b=clamp(b+Number(delta)*10,0,S.king?600:150);draw();};
  const build=document.getElementById('lockBuild');if(build)build.onclick=()=>send(S.king?'king:build':'build',{m,b});
  for(const input of main.querySelectorAll('[data-ti]'))input.oninput=()=>trainingValues[Number(input.dataset.ti)]=input.value;
- const submitTraining=document.getElementById('submitTraining');if(submitTraining)submitTraining.onclick=()=>{const q=TRAINING[S.myTraining.q],answer=q.type==='plot'?trainingPoints:trainingValues.map(v=>Number(v));if(q.type==='plot'&&answer.length!==3)return toast('Plot all three points first.');if(q.type==='table'&&trainingValues.some(v=>v===''))return toast('Complete all three table values.');send('training:answer',{q:S.myTraining.q,answer},a=>toast(a.correct?'Correct! +1 coin':a.retry?'Not quite. You have one more try.':'Not quite. Moving to the next question.'));};
+ const submitTraining=document.getElementById('submitTraining');if(submitTraining)submitTraining.onclick=()=>{const q=S.trainingQuestions[S.myTraining.q],answer=q.type==='plot'?trainingPoints:trainingValues.map(v=>Number(v));if(q.type==='plot'&&answer.length!==3)return toast('Plot all three points first.');if(q.type==='table'&&trainingValues.some(v=>v===''))return toast('Complete all three table values.');send('training:answer',{q:S.myTraining.q,answer},a=>toast(a.correct?'Correct! +1 coin':a.retry?'Not quite. You have one more try.':'Not quite. Moving to the next question.'));};
  const clearTraining=document.getElementById('clearTraining');if(clearTraining)clearTraining.onclick=()=>{trainingPoints=[];trainingValues=['','',''];draw();};
  const start=document.getElementById('startRace');if(start)start.onclick=()=>action('start');
+ const timerToggle=document.getElementById('timerToggle');if(timerToggle)timerToggle.onclick=()=>action(S.betPaused?'resume':'pause');
  const next=document.getElementById('nextRace');if(next)next.onclick=()=>action('next');
  const reset=document.getElementById('reset');if(reset)reset.onclick=()=>{if(confirm('Reset scores and return to Sunrise?'))action('reset');};
  if(raf)cancelAnimationFrame(raf);animate();
- if(phase==='training'&&role==='student'&&!S.myTraining?.done&&TRAINING[S.myTraining?.q]?.type==='plot'){
+ if(phase==='training'&&role==='student'&&!S.myTraining?.done&&S.trainingQuestions[S.myTraining?.q]?.type==='plot'){
   const svg=document.querySelector('#mountain svg');if(svg)svg.onclick=e=>{const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY;const local=point.matrixTransform(svg.getScreenCTM().inverse()),x=clamp(Math.round((local.x-300)/38),-6,6),y=clamp(Math.round((300-local.y)/38),-6,6),key=x+','+y,at=trainingPoints.findIndex(p=>p[0]+','+p[1]===key);if(at>=0)trainingPoints.splice(at,1);else if(trainingPoints.length<3)trainingPoints.push([x,y]);draw();};
  }
 }
@@ -135,10 +143,10 @@ function kingCelebrationSVG(){
  return `<svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="King of the Mountain sunrise celebration"><g>${terrain('sunrise')}</g><circle cx="830" cy="126" r="78" fill="#fff2a7" stroke="#ffd36b" stroke-width="8"/><path d="M120 560L500 235L880 560Z" fill="#657b78" stroke="#e4f0df" stroke-width="8"/><path d="M427 298L500 235L579 303L536 292L505 319L474 289Z" fill="#f7f0dd"/><path d="M382 352h236" stroke="#f3cc6a" stroke-width="10" stroke-linecap="round"/><text x="500" y="70" text-anchor="middle" font-size="43" font-weight="900" fill="#fff7d3" stroke="#684923" stroke-width="7" paint-order="stroke">🌅 KING OF THE MOUNTAIN! 🌅</text><text x="500" y="122" text-anchor="middle" font-size="27" font-weight="900" fill="white" stroke="#59462c" stroke-width="5" paint-order="stroke">${winnerNames||'The mountain wins today!'}</text><text x="500" y="163" text-anchor="middle" font-size="20" font-weight="900" fill="#fff9dc" stroke="#59462c" stroke-width="4" paint-order="stroke">Sunrise at ${S.sunriseSeconds} seconds · ${top} feet</text>${winnerTurtles}${runners}<text x="500" y="584" text-anchor="middle" font-size="19" font-weight="900" fill="white" stroke="#28434b" stroke-width="4" paint-order="stroke">THE FINAL CLIMB IS COMPLETE!</text></svg>`;
 }
 function trainingSVG(){
- const t=S.myTraining,q=t&&!t.done?TRAINING[t.q]:null,step=38,X=x=>300+x*step,Y=y=>300-y*step;
+ const t=S.myTraining,q=t&&!t.done?S.trainingQuestions[t.q]:null,step=38,X=x=>300+x*step,Y=y=>300-y*step;
  let grid='';for(let i=-6;i<=6;i++){grid+=`<line x1="${X(i)}" y1="72" x2="${X(i)}" y2="528" stroke="#ffffff" opacity="${i===0?.9:.28}" stroke-width="${i===0?4:1}"/><line x1="72" y1="${Y(i)}" x2="528" y2="${Y(i)}" stroke="#ffffff" opacity="${i===0?.9:.28}" stroke-width="${i===0?4:1}"/>`;if(i!==0)grid+=`<text x="${X(i)}" y="318" text-anchor="middle" font-size="13" fill="white" font-weight="900">${i}</text><text x="286" y="${Y(i)+5}" text-anchor="end" font-size="13" fill="white" font-weight="900">${i}</text>`;}
  if(!q)return `<svg viewBox="0 0 600 600"><rect width="600" height="600" fill="#72b8ce"/>${grid}<text x="300" y="170" text-anchor="middle" font-size="42">${role==='teacher'?'🐢📊':'🏁🐢'}</text><text x="300" y="220" text-anchor="middle" fill="white" font-size="27" font-weight="900">${role==='teacher'?'STUDENTS ARE TRAINING':'TRAINING COMPLETE!'}</text></svg>`;
- let route='';if(q.type==='table')route=`<path d="M${X(-3)} ${Y(5)}L${X(5)} ${Y(-3)}" stroke="#f9d45e" stroke-width="8" fill="none" stroke-linecap="round"/><text x="${X(1)}" y="${Y(1)-18}" font-size="31">🐢</text>`;
+ let route='';if(q.type==='table')route=`<path d="M${X(-3)} ${Y(q.route.m*(-3)+q.route.b)}L${X(3)} ${Y(q.route.m*3+q.route.b)}" stroke="#f9d45e" stroke-width="8" fill="none" stroke-linecap="round"/><text x="${X(1)}" y="${Y(q.route.m+q.route.b)-18}" font-size="31">🐢</text>`;
  const points=trainingPoints.map((p,i)=>`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="11" fill="#ffdf58" stroke="#234753" stroke-width="4"/><text x="${X(p[0])+15}" y="${Y(p[1])-12}" fill="white" stroke="#234753" stroke-width="3" paint-order="stroke" font-weight="900">(${p[0]}, ${p[1]})</text>`).join('');
  const ordered=[...trainingPoints].sort((a,b)=>a[0]-b[0]),studentLine=ordered.length>1?`<polyline points="${ordered.map(p=>X(p[0])+','+Y(p[1])).join(' ')}" fill="none" stroke="#ffdf58" stroke-width="5" opacity=".7"/>`:'';
  return `<svg viewBox="0 0 600 600" role="img" aria-label="Coordinate plane for turtle training"><rect width="600" height="600" fill="#72b8ce"/><path d="M0 540Q150 505 300 543T600 535V600H0Z" fill="#4a966e"/>${grid}${route}${studentLine}${points}<text x="550" y="318" fill="white" font-weight="900">x</text><text x="310" y="62" fill="white" font-weight="900">y</text></svg>`;
@@ -161,9 +169,9 @@ function sceneSVG(){if(!S?.race)return '';const r=S.race,final=S.final,king=S.ki
  else if(['results','queen-finished','king-finished'].includes(S.phase)){time=r.seconds;show=true;}
  const hidden=['betting','workshop','king-workshop'].includes(S.phase);
  let grid='';for(let i=0;i<=4;i++){const y=i*maxY/4;grid+=`<line x1="105" y1="${Y(y)}" x2="920" y2="${Y(y)}" stroke="#fff" opacity=".24"/><text x="94" y="${Y(y)+5}" text-anchor="end" fill="#fff" stroke="#243e50" stroke-width="3" paint-order="stroke" font-weight="900">${y}</text>`;}
- let plateau='';if(final){const a=Y(S.plateau.high),bb=Y(S.plateau.low),middle=Y((S.plateau.high+S.plateau.low)/2);
+ let plateau='';if(final){const a=Y(S.plateau.high),bb=Y(S.plateau.low),middle=Y(S.lakeTarget);
  // The lake exists ONLY at the horizontal finish line; it is not a band along the climb.
- plateau=`<path d="M878 ${bb+4} Q919 ${bb+22} 952 ${bb+6} L955 ${bb+32} Q914 ${bb+48} 878 ${bb+28}Z" fill="#c5b6a1" stroke="#f2e5d1" stroke-width="3"/><rect x="890" y="${a}" width="53" height="${bb-a}" rx="12" fill="#48d5e3" opacity=".9" stroke="#ffffff" stroke-width="3"/><path d="M893 ${a+12}q12 -10 24 0t24 0" fill="none" stroke="#d9ffff" stroke-width="3"/><ellipse cx="913" cy="${middle}" rx="16" ry="7" fill="#f4d18b" stroke="#fff2b1" stroke-width="2"/><text x="911" y="${a-15}" text-anchor="middle" font-size="17" font-weight="900" fill="white" stroke="#194354" stroke-width="3" paint-order="stroke">LAKE</text><text x="960" y="${(a+bb)/2}" font-size="13" fill="white" font-weight="900" transform="rotate(90 960 ${(a+bb)/2})" text-anchor="middle">${S.plateau.low}–${S.plateau.high}ft</text>`;
+ plateau=`<path d="M878 ${bb+4} Q919 ${bb+22} 952 ${bb+6} L955 ${bb+32} Q914 ${bb+48} 878 ${bb+28}Z" fill="#c5b6a1" stroke="#f2e5d1" stroke-width="3"/><rect x="890" y="${a}" width="53" height="${bb-a}" rx="12" fill="#48d5e3" opacity=".9" stroke="#ffffff" stroke-width="3"/><path d="M893 ${a+12}q12 -10 24 0t24 0" fill="none" stroke="#d9ffff" stroke-width="3"/><ellipse cx="913" cy="${middle}" rx="16" ry="7" fill="#f4d18b" stroke="#fff2b1" stroke-width="2"/><text x="911" y="${middle-13}" text-anchor="middle" font-size="14" font-weight="900" fill="white" stroke="#194354" stroke-width="3" paint-order="stroke">${S.lakeTarget} FT</text><text x="911" y="${a-15}" text-anchor="middle" font-size="17" font-weight="900" fill="white" stroke="#194354" stroke-width="3" paint-order="stroke">LAKE</text><text x="960" y="${(a+bb)/2}" font-size="13" fill="white" font-weight="900" transform="rotate(90 960 ${(a+bb)/2})" text-anchor="middle">${S.plateau.low}–${S.plateau.high}ft</text>`;
  }
  let paths='';for(let i=0;i<n;i++){
   const [mm,bb]=r.lines[i],x0=X(0),y0=Y(bb),xx=X(time),yy=Y(mm*time+bb);
